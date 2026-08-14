@@ -2,7 +2,7 @@ const { SecretsManagerClient, GetSecretValueCommand } = require("@aws-sdk/client
 
 const secretsClient = new SecretsManagerClient({});
 const SECRET_NAME = "sahayak/gemini-api-key";
-const MODEL_NAME = "gemini-2.5-flash";
+const MODEL_NAME = "gemini-3-flash-preview";
 const DEFAULT_RESULT = { intent: "escalation", confidence: 0 };
 
 function extractJsonObject(text) {
@@ -73,7 +73,20 @@ exports.handler = async (event) => {
 		const apiKey = await getGeminiApiKey();
 		const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-		const systemInstruction = `You are an intent classifier for chat routing. Classify the user's message into exactly one intent from this set only: "faq", "booking", "escalation". Return ONLY valid JSON in this exact shape: { "intent": "faq" | "booking" | "escalation", "confidence": number }. Do not include markdown, backticks, or any extra keys/text.`;
+		const systemInstruction = `You are an intent classifier for a travel support platform's chat routing system. Classify the user's message into exactly one intent from this set only: "faq", "booking", "escalation".
+
+Use these guidelines:
+- "faq": informational questions about policies, baggage, check-in/check-out, refund timelines,
+	travel documentation, seat selection, insurance, payment methods, loyalty programs. Example:
+	"What is the baggage allowance?", "What's your cancellation policy?"
+- "booking": requests to search, book, modify, or cancel flights/hotels, or check booking status.
+	Example: "I want a hotel in Goa from August 20 to 23", "Cancel my flight booking", "Book the deluxe room."
+- "escalation": complaints, payment issues, disputes, failed transactions, or any message expressing
+	frustration or requesting a human. Example: "My payment was deducted but I never got my booking
+	confirmation", "This is unacceptable, connect me to a human."
+
+Return ONLY valid JSON in this exact shape: { "intent": "faq" | "booking" | "escalation", "confidence": number }.
+Do not include markdown, backticks, or any extra keys/text.`;
 
 		const response = await fetch(endpoint, {
 			method: "POST",
