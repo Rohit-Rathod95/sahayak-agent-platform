@@ -118,7 +118,8 @@ Return ONLY the JSON, no markdown, no extra text.`;
 		return {
 			response: `I've flagged this for our support team - case ${caseId}. Someone will follow up with you shortly. In the meantime, here's a summary: ${parsed.issue}`,
 			connectionId: event?.connectionId,
-			caseId
+			caseId,
+			agentType: "escalation"
 		};
 	} catch (error) {
 		console.error("Escalation agent failed", error);
@@ -149,7 +150,8 @@ Return ONLY the JSON, no markdown, no extra text.`;
 
 		return {
 			response: "I've flagged this for our support team. Someone will follow up with you shortly.",
-			connectionId: event?.connectionId
+			connectionId: event?.connectionId,
+			agentType: "escalation"
 		};
 	}
 };

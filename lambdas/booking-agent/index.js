@@ -100,45 +100,48 @@ async function runFlightSearch(args) {
 	if (!destination) {
 		return { ok: false, reason: "missing_destination", items: [] };
 	}
-
-	const expressionNames = {
-		"#type": "type",
-		"#destination": "destination",
-		"#seatsAvailable": "seatsAvailable"
-	};
-	const expressionValues = {
-		":type": "flight",
-		":destination": destination,
-		":zero": 0
-	};
-
-	let filterExpression = "#type = :type AND #destination = :destination AND #seatsAvailable > :zero";
-
 	const origin = asString(args?.origin);
-	if (origin) {
-		expressionNames["#origin"] = "origin";
-		expressionValues[":origin"] = origin;
-		filterExpression += " AND #origin = :origin";
-	}
-
 	const date = asString(args?.date);
-	if (date) {
-		expressionNames["#date"] = "date";
-		expressionValues[":date"] = date;
-		filterExpression += " AND #date = :date";
-	}
+	const destinationLower = destination.toLowerCase();
+	const originLower = origin ? origin.toLowerCase() : "";
 
 	const result = await ddbDocClient.send(
 		new ScanCommand({
 			TableName: INVENTORY_TABLE,
-			FilterExpression: filterExpression,
-			ExpressionAttributeNames: expressionNames,
-			ExpressionAttributeValues: expressionValues,
+			FilterExpression: "#type = :type AND #seatsAvailable > :zero",
+			ExpressionAttributeNames: {
+				"#type": "type",
+				"#seatsAvailable": "seatsAvailable"
+			},
+			ExpressionAttributeValues: {
+				":type": "flight",
+				":zero": 0
+			},
 			Limit: 50
 		})
 	);
 
-	const items = (result.Items || []).slice(0, 5);
+	const items = (result.Items || [])
+		.filter((item) => {
+			const itemDestination = asString(item?.destination).toLowerCase();
+			if (itemDestination !== destinationLower) {
+				return false;
+			}
+
+			if (originLower) {
+				const itemOrigin = asString(item?.origin).toLowerCase();
+				if (itemOrigin !== originLower) {
+					return false;
+				}
+			}
+
+			if (date && asString(item?.date) !== date) {
+				return false;
+			}
+
+			return true;
+		})
+		.slice(0, 5);
 	return { ok: true, items };
 }
 
@@ -148,25 +151,27 @@ async function runHotelSearch(args) {
 		return { ok: false, reason: "missing_city", items: [] };
 	}
 
+	const cityLower = city.toLowerCase();
+
 	const result = await ddbDocClient.send(
 		new ScanCommand({
 			TableName: INVENTORY_TABLE,
-			FilterExpression: "#type = :type AND #city = :city AND #roomsAvailable > :zero",
+			FilterExpression: "#type = :type AND #roomsAvailable > :zero",
 			ExpressionAttributeNames: {
 				"#type": "type",
-				"#city": "city",
 				"#roomsAvailable": "roomsAvailable"
 			},
 			ExpressionAttributeValues: {
 				":type": "hotel",
-				":city": city,
 				":zero": 0
 			},
 			Limit: 50
 		})
 	);
 
-	const items = (result.Items || []).slice(0, 5);
+	const items = (result.Items || [])
+		.filter((item) => asString(item?.city).toLowerCase() === cityLower)
+		.slice(0, 5);
 	return { ok: true, items };
 }
 
@@ -252,7 +257,8 @@ exports.handler = async (event) => {
 			return {
 				response: "Please share what travel help you need, such as finding flights or hotels.",
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "booking"
 			};
 		}
 
@@ -362,7 +368,8 @@ exports.handler = async (event) => {
 					modelText ||
 					"Could you clarify whether you want to search flights, search hotels, or create a booking?",
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "booking"
 			};
 		}
 
@@ -375,7 +382,8 @@ exports.handler = async (event) => {
 				return {
 					response: "I couldn't find any matching flights/hotels. Could you try different dates or destination?",
 					connectionId: event?.connectionId,
-					needsEscalation: false
+					needsEscalation: false,
+					agentType: "booking"
 				};
 			}
 
@@ -383,7 +391,8 @@ exports.handler = async (event) => {
 			return {
 				response: `I found ${result.items.length} flights: ${listed}`,
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "booking"
 			};
 		}
 
@@ -393,7 +402,8 @@ exports.handler = async (event) => {
 				return {
 					response: "I couldn't find any matching flights/hotels. Could you try different dates or destination?",
 					connectionId: event?.connectionId,
-					needsEscalation: false
+					needsEscalation: false,
+					agentType: "booking"
 				};
 			}
 
@@ -401,7 +411,8 @@ exports.handler = async (event) => {
 			return {
 				response: `I found ${result.items.length} hotels: ${listed}`,
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "booking"
 			};
 		}
 
@@ -413,7 +424,8 @@ exports.handler = async (event) => {
 				return {
 					response: `Your booking is confirmed! Booking ID: ${bookingResult.booking.bookingId} for ${details}.`,
 					connectionId: event?.connectionId,
-					needsEscalation: false
+					needsEscalation: false,
+					agentType: "booking"
 				};
 			}
 
@@ -421,7 +433,8 @@ exports.handler = async (event) => {
 				return {
 					response: "Sorry, I couldn't process your travel request right now. Let me connect you with support.",
 					connectionId: event?.connectionId,
-					needsEscalation: true
+					needsEscalation: true,
+					agentType: "booking"
 				};
 			}
 
@@ -429,7 +442,8 @@ exports.handler = async (event) => {
 				return {
 					response: "Sorry, that item is no longer available. Would you like to see other options?",
 					connectionId: event?.connectionId,
-					needsEscalation: false
+					needsEscalation: false,
+					agentType: "booking"
 				};
 			}
 
@@ -437,14 +451,16 @@ exports.handler = async (event) => {
 				return {
 					response: "I could not find that travel option anymore. Would you like me to show alternatives?",
 					connectionId: event?.connectionId,
-					needsEscalation: false
+					needsEscalation: false,
+					agentType: "booking"
 				};
 			}
 
 			return {
 				response: "Please share the item ID and traveler name to complete your booking.",
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "booking"
 			};
 		}
 
@@ -452,14 +468,16 @@ exports.handler = async (event) => {
 		return {
 			response: fallbackText || "Could you clarify your request so I can help with flights, hotels, or booking?",
 			connectionId: event?.connectionId,
-			needsEscalation: false
+			needsEscalation: false,
+			agentType: "booking"
 		};
 	} catch (error) {
 		console.error("Booking agent handler failed", error);
 		return {
 			response: "Sorry, I couldn't process your travel request right now. Let me connect you with support.",
 			connectionId: event?.connectionId,
-			needsEscalation: true
+			needsEscalation: true,
+			agentType: "booking"
 		};
 	}
 };

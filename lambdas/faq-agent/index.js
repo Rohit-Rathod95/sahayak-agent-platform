@@ -96,21 +96,24 @@ Rules:
 			return {
 				response: parsed.response.trim(),
 				connectionId: event?.connectionId,
-				needsEscalation: false
+				needsEscalation: false,
+				agentType: "faq"
 			};
 		}
 
 		return {
 			response: "I don't have reliable information on that. Let me connect you with a support specialist who can help.",
 			connectionId: event?.connectionId,
-			needsEscalation: true
+			needsEscalation: true,
+			agentType: "faq"
 		};
 	} catch (error) {
 		console.error("Knowledge Specialist agent failed", error);
 		return {
 			response: "Sorry, I couldn't process that right now. Please try again.",
 			connectionId: event?.connectionId,
-			needsEscalation: true
+			needsEscalation: true,
+			agentType: "faq"
 		};
 	}
 };
